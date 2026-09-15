@@ -1,0 +1,23 @@
+[package]
+name = "okurrr"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.56"
+authors = ["Adam Williams"]
+description = "programmatic freedom from having to match Result<T, E>, okurrr!"
+readme = "README.md"
+repository = "https://github.com/awill1988/okurrr"
+license = "MIT OR Apache-2.0"
+keywords = ["macro", "ok", "err", "match", "opentelemetry"]
+categories = ["rust-patterns", "no-std"]
+
+[dependencies]
+tracing = { version = "0.1", default-features = false, optional = true }
+
+[features]
+default = []
+tracing = ["dep:tracing"]
+otel = ["tracing"]
+
+[dev-dependencies]
+tracing-subscriber = "0.3"
