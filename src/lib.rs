@@ -2,8 +2,8 @@
 
 //! # okerrr
 //!
-//! A `no_std` declarative macro for binding a `Result::Err` payload in a
-//! diverging `else` branch.
+//! A `no_std` declarative macro for dispatching a `Result::Err` payload through
+//! diverging `case` clauses.
 //!
 //! ## The pattern
 //!
@@ -26,18 +26,23 @@
 //! use okerrr::okerrr;
 //!
 //! fn process(input: Result<i32, &'static str>) -> Result<i32, &'static str> {
-//!     let value = okerrr!(input, else error => return Err(error));
+//!     let value = okerrr!(input, case error => return Err(error));
 //!     Ok(value * 2)
 //! }
 //! ```
 //!
-//! This is a bound `else`: the `Ok` payload continues in the surrounding
-//! scope, while the `else` branch binds the `Err` payload and must diverge.
-//! Its handler can `return`, `break`, `continue`, panic, loop forever, or call
-//! another never-returning expression.
+//! The `Ok` payload continues in the surrounding scope. Each `case` pattern
+//! matches the raw `Err` payload, and every handler must diverge. A handler can
+//! `return`, `break`, `continue`, panic, loop forever, or call another
+//! never-returning expression.
 //!
-//! Unlike a closure fallback, those control-flow expressions act on the
-//! surrounding function or loop. The input is evaluated exactly once.
+//! The clause-oriented style takes inspiration from
+//! [Elixir's `case` control flow][elixir-case]. Patterns, `if` guards,
+//! exhaustiveness, ownership, and divergence keep their Rust semantics. Unlike
+//! a closure fallback, control-flow expressions act on the surrounding
+//! function or loop. The input is evaluated exactly once.
+//!
+//! [elixir-case]: https://hexdocs.pm/elixir/case-cond-and-if.html#case
 //!
 //! An expression containing `.await` works when the invocation is already in
 //! an async context; the macro does not await implicitly.
@@ -48,11 +53,13 @@
 //! handler can call `tracing::error!` when that caller chooses to record the
 //! error. Subscriber and OpenTelemetry export setup belong to the application.
 
-/// Extracts an `Ok` payload or runs a diverging handler bound to the error.
+/// Extracts an `Ok` payload or dispatches the raw error through diverging cases.
 ///
-/// The only supported form is `okerrr!(expr, else error => handler)`. The input
-/// expression is evaluated once. On `Ok`, the macro evaluates to its payload.
-/// On `Err`, the payload is moved into `error` and `handler` must diverge.
+/// The supported form is
+/// `okerrr!(expr, case pattern if guard => handler, ...)`. The `if` guard is
+/// optional. The input expression is evaluated once. On `Ok`, the macro
+/// evaluates to its payload. On `Err`, the clauses exhaustively match the raw
+/// error payload and every handler must diverge.
 ///
 /// A handler may `return`, `break`, `continue`, panic, loop forever, or invoke
 /// another expression that never returns. Because the handler is expanded at
@@ -67,7 +74,27 @@
 /// ```rust
 /// # use okerrr::okerrr;
 /// async fn load(input: Result<u32, &'static str>) -> Result<u32, &'static str> {
-///     let value = okerrr!(async { input }.await, else error => return Err(error));
+///     let value = okerrr!(async { input }.await, case error => return Err(error));
+///     Ok(value)
+/// }
+/// ```
+///
+/// # Multiple error cases
+///
+/// ```rust
+/// # use okerrr::okerrr;
+/// enum FetchError {
+///     Busy(u8),
+///     Fatal,
+/// }
+///
+/// fn load(input: Result<u32, FetchError>, retries: u8) -> Result<u32, FetchError> {
+///     let value = okerrr!(
+///         input,
+///         case FetchError::Busy(attempt) if attempt < retries => return Ok(attempt.into()),
+///         case error @ FetchError::Busy(_) => return Err(error),
+///         case error => return Err(error),
+///     );
 ///     Ok(value)
 /// }
 /// ```
@@ -77,23 +104,44 @@
 /// ```compile_fail
 /// # use okerrr::okerrr;
 /// fn recover(input: Result<u32, &'static str>) -> u32 {
-///     okerrr!(input, else error => {
+///     okerrr!(input, case error => {
 ///         let _ = error;
 ///         0
 ///     })
 /// }
 /// ```
+///
+/// # Error cases must be exhaustive
+///
+/// ```compile_fail
+/// # use okerrr::okerrr;
+/// enum Error {
+///     Missing,
+///     Denied,
+/// }
+///
+/// fn load(input: Result<u32, Error>) {
+///     let _ = okerrr!(input, case Error::Missing => return);
+/// }
+/// ```
 #[macro_export]
 macro_rules! okerrr {
-    ($expr:expr, else $error:ident => $handler:expr) => {{
+    (
+        $expr:expr,
+        $(case $error:pat $(if $guard:expr)? => $handler:expr),+ $(,)?
+    ) => {{
         match $expr {
             ::core::result::Result::Ok(value) => value,
-            ::core::result::Result::Err($error) => {
-                #[allow(unreachable_code, clippy::diverging_sub_expression)]
-                let __okerrr_never: ::core::convert::Infallible = $handler;
-                #[allow(unreachable_code, unused_variables)]
-                match __okerrr_never {}
-            }
+            ::core::result::Result::Err(__okerrr_error) => match __okerrr_error {
+                $(
+                    $error $(if $guard)? => {
+                        #[allow(unreachable_code, clippy::diverging_sub_expression)]
+                        let __okerrr_never: ::core::convert::Infallible = $handler;
+                        #[allow(unreachable_code, unused_variables)]
+                        match __okerrr_never {}
+                    }
+                ),+
+            },
         }
     }};
 }

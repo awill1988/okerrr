@@ -1,7 +1,10 @@
 # okerrr!
 
-A `no_std` macro for binding a `Result::Err` payload in a diverging `else`
-branch.
+**Keep the `Ok`. Case the `Err`. Carry on.**
+
+`okerrr!` is a dependency-free, `no_std` macro that extracts a `Result::Ok`
+payload and dispatches its raw error through exhaustive, diverging `case`
+clauses.
 
 [![Crates.io](https://img.shields.io/crates/v/okerrr.svg)](https://crates.io/crates/okerrr)
 [![Documentation](https://docs.rs/okerrr/badge.svg)](https://docs.rs/okerrr)
@@ -9,7 +12,20 @@ branch.
 [![Code coverage](https://codecov.io/gh/awill1988/okerrr/graph/badge.svg?branch=main)](https://codecov.io/gh/awill1988/okerrr)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
 
-## Bound `else`
+```rust
+use okerrr::okerrr;
+
+fn process(input: Result<i32, &'static str>) -> Result<i32, &'static str> {
+    let value = okerrr!(input, case error => return Err(error));
+    Ok(value * 2)
+}
+```
+
+The expression runs once. An `Ok` becomes the value of the macro. Each `case`
+matches the raw `Err` payload and must leave the current path through `return`,
+`break`, `continue`, panic, or another never-returning expression.
+
+## The repeated pattern
 
 Rust's [`let-else`](https://rust-lang.github.io/rfcs/3137-let-else.html)
 keeps the successful value in the surrounding scope and requires the failure
@@ -28,32 +44,84 @@ fn process(input: Result<i32, &'static str>) -> Result<i32, &'static str> {
 }
 ```
 
-`okerrr!` expresses the same control flow as a bound `else`:
+`okerrr!` keeps the same control flow while removing the repeated `match`,
+`Ok`, and `Err` structure:
 
 ```rust
 use okerrr::okerrr;
 
 fn process(input: Result<i32, &'static str>) -> Result<i32, &'static str> {
-    let value = okerrr!(input, else error => return Err(error));
+    let value = okerrr!(input, case error => return Err(error));
     Ok(value * 2)
 }
 ```
 
-The macro has one form:
+This is the narrow gap between `let-else` and `match`: keep the successful
+binding in the surrounding scope while still inspecting the rejected payload.
+
+## Case clauses
+
+The macro has one form with one or more exhaustive error cases:
 
 ```rust
-okerrr!(result_expression, else error_binding => diverging_handler)
+okerrr!(
+    result_expression,
+    case error_pattern if optional_guard => diverging_handler,
+    case fallback_pattern => diverging_handler,
+)
 ```
 
-The input expression runs once. An `Ok` produces its payload. An `Err` moves
-its payload into the named binding, and the handler must `return`, `break`,
-`continue`, panic, loop forever, or call another expression that never
-returns. A value-producing fallback is rejected at compile time.
+Patterns match the raw `Err` payload, without another `Err(...)` wrapper. Rust
+checks the clauses for exhaustiveness; guarded clauses require an unguarded
+fallback. A value-producing handler is rejected at compile time.
 
 The handler expands directly in the caller, so its control flow applies to the
 surrounding function or loop. A closure such as `unwrap_or_else` can bind the
 error, but `return`, `break`, and `continue` inside a closure cannot control
 the caller.
+
+The clause-oriented presentation is inspired by Elixir's
+[`case`](https://hexdocs.pm/elixir/case-cond-and-if.html#case) control flow.
+The behavior remains Rust: clauses use Rust patterns and `if` guards, ownership
+and borrowing follow Rust match ergonomics, and every selected handler
+diverges in the caller's control-flow context.
+
+Bindings are the arguments to a selected clause. Destructure the payload to
+name its fields, or use Rust's `@` binding to retain the complete error while
+matching its shape:
+
+```rust
+case FetchError::Busy => continue,
+case error @ FetchError::Fatal => return Err(error),
+```
+
+Multiple cases distinguish retryable and terminal errors without restoring the
+outer `match`:
+
+```rust
+use okerrr::okerrr;
+
+enum FetchError {
+    Busy { attempt: usize },
+    Fatal,
+}
+
+fn first_value(
+    inputs: impl IntoIterator<Item = Result<i32, FetchError>>,
+    retries_left: usize,
+) -> Result<Option<i32>, FetchError> {
+    for input in inputs {
+        let value = okerrr!(
+            input,
+            case FetchError::Busy { attempt } if attempt < retries_left => continue,
+            case error @ FetchError::Busy { .. } => return Err(error),
+            case error => return Err(error),
+        );
+        return Ok(Some(value));
+    }
+    Ok(None)
+}
+```
 
 ## Async expressions
 
@@ -64,7 +132,7 @@ produced:
 use okerrr::okerrr;
 
 async fn load() -> Result<i32, &'static str> {
-    let value = okerrr!(fetch_value().await, else error => return Err(error));
+    let value = okerrr!(fetch_value().await, case error => return Err(error));
     Ok(value)
 }
 
@@ -84,7 +152,7 @@ The macro does not await implicitly.
 use okerrr::okerrr;
 
 fn read(input: Result<i32, &'static str>) -> Result<i32, &'static str> {
-    let value = okerrr!(input, else error => {
+    let value = okerrr!(input, case error => {
         tracing::error!(error = ?error, "read failed");
         return Err(error);
     });
@@ -128,7 +196,7 @@ reviewed changes before committing.
 
 Squash merges use the pull request title as the final commit message. Mark
 breaking changes with `!` in that title, such as
-`feat!: define bound else contract`, so release notes retain the signal.
+`feat!: add error case dispatch`, so release notes retain the signal.
 
 ## Releases
 
