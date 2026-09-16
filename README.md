@@ -79,12 +79,6 @@ The default build has no dependencies and supports `#![no_std]`.
 trait. If a caller decides an error deserves an event, put `tracing::error!`
 in the bound handler:
 
-```toml
-[dependencies]
-okerrr = "0.1"
-tracing = "0.1"
-```
-
 ```rust
 use okerrr::okerrr;
 
@@ -135,9 +129,11 @@ version to crates.io, and creates a matching GitHub release. Prerelease
 versions receive prerelease GitHub releases. Notes live in GitHub releases;
 there is no tracked changelog file.
 
-Publishing requires a `CARGO_REGISTRY_TOKEN` repository secret. Adding the
-release workflow alone does not publish the current `0.1.0`; the first
-automated release needs a version-bump pull request.
+Publishing requires a `CARGO_REGISTRY_TOKEN` repository secret. For
+bootstrap, `0.0.0` is an unreleased baseline: the first version increase
+from it triggers publishing. Later increases require the previous version
+to be published.
+
 Use `chore(release): bump version` for a version-only commit; release notes
 omit that commit.
 
