@@ -271,11 +271,11 @@ jobs:
       - name: Check version gate
         id: gate
         env:
-          BEFORE_SHA: ${{ github.event.before }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
           RELEASE_SHA: ${{ inputs.release_sha }}
         run: |
           target_sha="${RELEASE_SHA:-$GITHUB_SHA}"
-          before_sha="$BEFORE_SHA"
+          before_sha="$PUSH_BEFORE_SHA"
           if [ -n "$RELEASE_SHA" ]; then
             if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
               echo "release_sha must be a full commit sha" >&2
