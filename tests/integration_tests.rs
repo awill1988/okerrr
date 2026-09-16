@@ -175,3 +175,48 @@ fn dispatches_destructured_errors_with_guards() {
     );
     assert_eq!(load(Err(FetchError::Fatal), 3), Err(FetchError::Fatal));
 }
+
+#[test]
+fn dispatches_boxed_trait_object_errors() {
+    trait SomeError {
+        fn is_retryable(&self) -> bool;
+    }
+
+    struct DynamicError {
+        retryable: bool,
+    }
+
+    impl SomeError for DynamicError {
+        fn is_retryable(&self) -> bool {
+            self.retryable
+        }
+    }
+
+    fn sum(
+        inputs: impl IntoIterator<Item = Result<i32, Box<dyn SomeError>>>,
+    ) -> Result<i32, Box<dyn SomeError>> {
+        let mut total = 0;
+
+        for input in inputs {
+            let value = okerrr!(
+                input,
+                case error if error.is_retryable() => continue,
+                case error => return Err(error),
+            );
+            total += value;
+        }
+
+        Ok(total)
+    }
+
+    let retryable: Result<i32, Box<dyn SomeError>> =
+        Err(Box::new(DynamicError { retryable: true }));
+    assert_eq!(sum([Ok(1), retryable, Ok(2)]).ok(), Some(3));
+
+    let fatal: Result<i32, Box<dyn SomeError>> = Err(Box::new(DynamicError { retryable: false }));
+    let error = match sum([fatal]) {
+        Err(error) => error,
+        Ok(value) => panic!("unexpected success: {value}"),
+    };
+    assert!(!error.is_retryable());
+}
