@@ -99,10 +99,55 @@ jobs:
       - name: Check minimum supported Rust version
         run: cargo check --no-default-features
 
+  security:
+    name: Security Scans
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: write
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: rust
+          build-mode: none
+          queries: security-extended
+
+      - name: Generate root lockfile
+        run: cargo generate-lockfile
+
+      - name: Audit crate dependencies
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ github.token }}
+
+      - name: Audit downstream dependencies
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ github.token }}
+          working-directory: tests/fixtures/downstream
+
+      - name: Review dependency changes
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: low
+          fail-on-scopes: runtime, development, unknown
+
+      - name: Analyze Rust
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:rust
+
   release_preview:
     name: Release Preview
     if: github.event_name == 'pull_request'
-    needs: [test, msrv, commit_lint]
+    needs: [test, msrv, security, commit_lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -138,7 +183,7 @@ jobs:
   release_gate:
     name: Check Release Version
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [test, msrv, commit_lint]
+    needs: [test, msrv, security, commit_lint]
     runs-on: ubuntu-latest
     outputs:
       release: ${{ steps.gate.outputs.release }}
