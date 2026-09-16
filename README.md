@@ -71,8 +71,9 @@ okerrr!(
 )
 ```
 
-Cases match the raw error. Rust checks exhaustiveness, every handler must
-diverge, and `return`, `break`, or `continue` controls the caller.
+Cases match the raw error. Rust checks exhaustiveness, and every handler must
+leave the current path: usually with `return`, or inside a loop with `continue`
+to skip an item or `break` to finish the loop.
 
 The `case` spelling nods to [Elixir](https://hexdocs.pm/elixir/case-cond-and-if.html#case);
 patterns, guards, ownership, and borrowing remain Rust. Use `@` to keep the
