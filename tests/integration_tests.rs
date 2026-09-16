@@ -1,9 +1,9 @@
-use okurrr::{okurr, okurrr, okurrr_some};
+use okurrr::{okerr, okerr_some, okerrr, okerrr_some, okurr, okurr_some, okurrr, okurrr_some};
 
 #[test]
-fn test_okurrr_bind_error_and_return() {
+fn test_okerrr_bind_error_and_return() {
     fn inner(res: Result<i32, &'static str>) -> Result<i32, String> {
-        let val = okurrr!(res, err => return Err(format!("bound: {err}")));
+        let val = okerrr!(res, err => return Err(format!("bound: {err}")));
         Ok(val * 10)
     }
 
@@ -12,9 +12,9 @@ fn test_okurrr_bind_error_and_return() {
 }
 
 #[test]
-fn test_okurrr_else_err_keyword() {
+fn test_okerrr_else_err_keyword() {
     fn inner(res: Result<i32, &'static str>) -> Result<i32, String> {
-        let val = okurrr!(res, else err => return Err(format!("else_err: {err}")));
+        let val = okerrr!(res, else err => return Err(format!("else_err: {err}")));
         Ok(val + 1)
     }
 
@@ -23,33 +23,33 @@ fn test_okurrr_else_err_keyword() {
 }
 
 #[test]
-fn test_okurrr_else_fallback() {
+fn test_okerrr_else_fallback() {
     let ok_res: Result<i32, &'static str> = Ok(10);
     let err_res: Result<i32, &'static str> = Err("oops");
 
-    let v1 = okurrr!(ok_res, else 0);
-    let v2 = okurrr!(err_res, else -1);
+    let v1 = okerrr!(ok_res, else 0);
+    let v2 = okerrr!(err_res, else -1);
 
     assert_eq!(v1, 10);
     assert_eq!(v2, -1);
 }
 
 #[test]
-fn test_okurrr_shorthand_fallback() {
+fn test_okerrr_shorthand_fallback() {
     let ok_res: Result<i32, &'static str> = Ok(20);
     let err_res: Result<i32, &'static str> = Err("oops");
 
-    let v1 = okurrr!(ok_res, 0);
-    let v2 = okurrr!(err_res, -1);
+    let v1 = okerrr!(ok_res, 0);
+    let v2 = okerrr!(err_res, -1);
 
     assert_eq!(v1, 20);
     assert_eq!(v2, -1);
 }
 
 #[test]
-fn test_okurrr_shorthand_early_return() {
+fn test_okerrr_shorthand_early_return() {
     fn inner(res: Result<i32, &'static str>) -> Result<i32, String> {
-        let val = okurrr!(res);
+        let val = okerrr!(res);
         Ok(val + 100)
     }
 
@@ -58,12 +58,12 @@ fn test_okurrr_shorthand_early_return() {
 }
 
 #[test]
-fn test_okurrr_in_loop_control_flow() {
+fn test_okerrr_in_loop_control_flow() {
     let items = vec![Ok(1), Err("skip"), Ok(3), Err("stop"), Ok(5)];
     let mut sum = 0;
 
     for item in items {
-        let val = okurrr!(item, err => {
+        let val = okerrr!(item, err => {
             if err == "stop" {
                 break;
             } else {
@@ -77,16 +77,17 @@ fn test_okurrr_in_loop_control_flow() {
 }
 
 #[test]
-fn test_okurr_alias() {
-    let res: Result<&str, &str> = Ok("OKURRR!");
-    let val = okurr!(res, else "default");
-    assert_eq!(val, "OKURRR!");
+fn test_okerr_aliases() {
+    let res: Result<&str, &str> = Ok("OKERRR!");
+    assert_eq!(okerr!(res, else "default"), "OKERRR!");
+    assert_eq!(okurrr!(res, else "default"), "OKERRR!");
+    assert_eq!(okurr!(res, else "default"), "OKERRR!");
 }
 
 #[test]
-fn test_okurrr_some() {
+fn test_okerrr_some_and_aliases() {
     fn find_val(opt: Option<i32>) -> Option<i32> {
-        let v = okurrr_some!(opt);
+        let v = okerrr_some!(opt);
         Some(v * 2)
     }
 
@@ -94,9 +95,9 @@ fn test_okurrr_some() {
     assert_eq!(find_val(None), None);
 
     let opt_none: Option<i32> = None;
-    let fallback = okurrr_some!(opt_none, else 100);
-    assert_eq!(fallback, 100);
-
-    let fallback_short = okurrr_some!(opt_none, 200);
-    assert_eq!(fallback_short, 200);
+    assert_eq!(okerrr_some!(opt_none, else 100), 100);
+    assert_eq!(okerr_some!(opt_none, else 100), 100);
+    assert_eq!(okurrr_some!(opt_none, else 100), 100);
+    assert_eq!(okurr_some!(opt_none, 200), 200);
 }
+
