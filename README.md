@@ -71,24 +71,13 @@ okerrr!(
 )
 ```
 
-Patterns match the raw `Err` payload, without another `Err(...)` wrapper. Rust
-checks the clauses for exhaustiveness; guarded clauses require an unguarded
-fallback. A value-producing handler is rejected at compile time.
+Cases match the raw error. Rust checks exhaustiveness, and every handler must
+leave the current path: usually with `return`, or inside a loop with `continue`
+to skip an item or `break` to finish the loop.
 
-The handler expands directly in the caller, so its control flow applies to the
-surrounding function or loop. A closure such as `unwrap_or_else` can bind the
-error, but `return`, `break`, and `continue` inside a closure cannot control
-the caller.
-
-The clause-oriented presentation is inspired by Elixir's
-[`case`](https://hexdocs.pm/elixir/case-cond-and-if.html#case) control flow.
-The behavior remains Rust: clauses use Rust patterns and `if` guards, ownership
-and borrowing follow Rust match ergonomics, and every selected handler
-diverges in the caller's control-flow context.
-
-Bindings are the arguments to a selected clause. Destructure the payload to
-name its fields, or use Rust's `@` binding to retain the complete error while
-matching its shape:
+The `case` spelling nods to [Elixir](https://hexdocs.pm/elixir/case-cond-and-if.html#case);
+patterns, guards, ownership, and borrowing remain Rust. Use `@` to keep the
+whole error while matching its shape:
 
 ```rust
 case FetchError::Busy => continue,
