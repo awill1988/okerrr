@@ -111,6 +111,9 @@ sets the tone; the macro's contract comes from Rust.
 
 ## Contributor checks
 
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a change. Community
+pull requests require an acknowledged issue before implementation begins.
+
 The conventional commit linter is written in Rust. Activate the tracked hooks:
 
 ```sh
