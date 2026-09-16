@@ -4,14 +4,16 @@ use okerrr::okerrr;
 
 pub struct Opaque;
 
-pub fn ordinary(input: Result<u8, Opaque>) -> u8 {
-    okerrr!(input, 0)
+pub fn ordinary(input: Result<u8, Opaque>) -> Result<u8, Opaque> {
+    let value = okerrr!(input, else error => return Err(error));
+    Ok(value)
 }
 
 #[cfg(feature = "with_tracing")]
-pub fn caller_traced(input: Result<u8, &'static str>) -> u8 {
-    okerrr!(input, error => {
+pub fn caller_traced(input: Result<u8, &'static str>) -> Result<u8, &'static str> {
+    let value = okerrr!(input, else error => {
         tracing::error!(error = ?error, "caller handled error");
-        0
-    })
+        return Err(error);
+    });
+    Ok(value)
 }
