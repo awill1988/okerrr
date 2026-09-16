@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test & Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Run default tests
+        run: cargo test
+
+      - name: Check formatting
+        run: |
+          cargo fmt --all -- --check
+          cargo fmt --manifest-path tests/fixtures/downstream/Cargo.toml -- --check
+
+      - name: Check no_std downstream
+        run: cargo check --manifest-path tests/fixtures/downstream/Cargo.toml --no-default-features
+
+      - name: Test caller-side tracing downstream
+        run: cargo test --manifest-path tests/fixtures/downstream/Cargo.toml --features with_tracing
+
+      - name: Run clippy
+        run: |
+          cargo clippy --all-targets --all-features -- -D warnings
+          cargo clippy --manifest-path tests/fixtures/downstream/Cargo.toml --all-targets --features with_tracing -- -D warnings
+
+      - name: Cargo Publish Dry Run
+        run: cargo publish --dry-run
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Generate Code Coverage
+        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: lcov.info
+          fail_ci_if_error: false
