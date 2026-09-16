@@ -1,6 +1,6 @@
 #![no_std]
 
-//! # okurrr
+//! # okerrr
 //!
 //! `okerrr!` (and its aliases `okerr!`, `okurrr!`, `okurr!`) provides lightweight, ergonomic macros for Rust
 //! to collapse multi-line `match` patterns on `Result` and `Option` into clean 1-liners while retaining full
@@ -15,7 +15,7 @@
 //! `okerrr!` bridges this gap effortlessly by harmonizing `Ok` and `Err`:
 //!
 //! ```rust
-//! use okurrr::okerrr;
+//! use okerrr::okerrr;
 //!
 //! fn process(input: Result<i32, &'static str>) -> Result<i32, &'static str> {
 //!     let val = okerrr!(input, err => {
@@ -32,7 +32,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! okurrr = { version = "0.1", features = ["otel"] }
+//! okerrr = { version = "0.1", features = ["otel"] }
 //! ```
 //!
 //! When the feature is active, error branches in `okerrr!` automatically emit a `tracing::error!` event!

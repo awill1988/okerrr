@@ -1,9 +1,9 @@
-# okurrr 💅
+# okerrr 💅
 
 Rust macros to collapse tedious multi-line `match` patterns for `Ok`/`Err` and `Option` handling into clean 1-liners while binding error payloads and maintaining full control flow.
 
-[![Crates.io](https://img.shields.io/crates/v/okurrr.svg)](https://crates.io/crates/okurrr)
-[![Documentation](https://docs.rs/okurrr/badge.svg)](https://docs.rs/okurrr)
+[![Crates.io](https://img.shields.io/crates/v/okerrr.svg)](https://crates.io/crates/okerrr)
+[![Documentation](https://docs.rs/okerrr/badge.svg)](https://docs.rs/okerrr)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
 
 ---
@@ -18,7 +18,7 @@ In standard Rust:
 `okerrr!` solves this annoyance in 1 line by harmonizing `Ok` and `Err`:
 
 ```rust
-use okurrr::okerrr;
+use okerrr::okerrr;
 
 fn process_data(res: Result<Data, MyError>) -> Result<Output, MyError> {
     // Bind error payload 'err' AND retain early return control flow!
@@ -75,7 +75,7 @@ Add the `otel` or `tracing` feature flag to `Cargo.toml`:
 
 ```toml
 [dependencies]
-okurrr = { version = "0.1", features = ["otel"] }
+okerrr = { version = "0.1", features = ["otel"] }
 ```
 
 When enabled, any caught `Err(err)` will automatically record a `tracing::error!(target: "okerrr", error = %err, ...)` event before executing your handler block!
@@ -85,4 +85,5 @@ When enabled, any caught `Err(err)` will automatically record a `tracing::error!
 ## License
 
 Dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE).
+
 

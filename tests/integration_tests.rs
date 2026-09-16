@@ -1,4 +1,4 @@
-use okurrr::{okerr, okerr_some, okerrr, okerrr_some, okurr, okurr_some, okurrr, okurrr_some};
+use okerrr::{okerr, okerr_some, okerrr, okerrr_some, okurr, okurr_some, okurrr, okurrr_some};
 
 #[test]
 fn test_okerrr_bind_error_and_return() {

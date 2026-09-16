@@ -1,5 +1,5 @@
 [package]
-name = "okurrr"
+name = "okerrr"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.56"
@@ -8,7 +8,7 @@ description = "programmatic freedom from having to match Result<T, E>, okerrr!"
 readme = "README.md"
 repository = "https://github.com/awill1988/okerrr"
 license = "MIT OR Apache-2.0"
-keywords = ["macro", "ok", "err", "match", "opentelemetry"]
+keywords = ["macro", "ok", "err", "okerrr", "opentelemetry"]
 categories = ["rust-patterns", "no-std"]
 
 [dependencies]

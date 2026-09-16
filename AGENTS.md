@@ -1,4 +1,4 @@
-# Agent & Contributor Guidelines for `okurrr`
+# Agent & Contributor Guidelines for `okerrr`
 
 ## Commit Standards
 
