@@ -25,11 +25,11 @@ class ReleaseGateTests(unittest.TestCase):
     def test_unchanged_version_skips_release(self):
         self.assertFalse(release_decision("0.0.0", "0.0.0", "0.1.0", []))
 
-    def test_setup_change_establishes_unreleased_baseline(self):
+    def test_history_setup_establishes_bootstrap_baseline(self):
         self.assertFalse(release_decision("0.0.0", "0.1.0", "0.1.0", []))
 
     def test_first_version_bump_releases(self):
-        self.assertTrue(release_decision("0.0.1", "0.0.0", "0.1.0", []))
+        self.assertTrue(release_decision("0.1.0", "0.0.0", "0.1.0", ["0.0.0"]))
 
     def test_first_prerelease_bump_releases(self):
         self.assertTrue(release_decision("0.1.0-beta.1", "0.0.0", "0.1.0", []))

@@ -18,7 +18,7 @@ SEMVER = re.compile(
     r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
     r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
 )
-UNRELEASED_BASELINE = "0.0.0"
+BOOTSTRAP_BASELINE = "0.0.0"
 
 
 def parse_version(value):
@@ -121,13 +121,13 @@ def initial_version():
 def release_decision(current, previous, initial, versions):
     if current == previous:
         return False
-    if current == UNRELEASED_BASELINE:
+    if current == BOOTSTRAP_BASELINE:
         if previous == initial and not versions:
             return False
-        raise ValueError("the unreleased baseline cannot replace a later version")
+        raise ValueError("the bootstrap baseline cannot replace a later version")
     if compare_versions(current, previous) <= 0:
         raise ValueError(f"{current} must exceed previous main version {previous}")
-    if previous != UNRELEASED_BASELINE and previous not in versions:
+    if previous != BOOTSTRAP_BASELINE and previous not in versions:
         raise ValueError(f"previous main version {previous} is not published")
     for published in versions:
         if compare_versions(current, published) <= 0:

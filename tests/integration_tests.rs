@@ -1,173 +1,86 @@
-use okerrr::{okerr, okerr_some, okerrr, okerrr_some};
+use okerrr::okerrr;
+use std::cell::Cell;
 
 #[test]
-fn test_okerrr_bind_error_and_return() {
-    fn inner(res: Result<i32, &'static str>) -> Result<i32, String> {
-        let val = okerrr!(res, err => return Err(format!("bound: {}", err)));
-        Ok(val * 10)
+fn extracts_ok_payload() {
+    fn double(input: Result<i32, &'static str>) -> Result<i32, &'static str> {
+        let value = okerrr!(input, else error => return Err(error));
+        Ok(value * 2)
     }
 
-    assert_eq!(inner(Ok(5)), Ok(50));
-    assert_eq!(inner(Err("bad")), Err("bound: bad".to_string()));
+    assert_eq!(double(Ok(21)), Ok(42));
 }
 
 #[test]
-fn test_okerrr_else_err_keyword() {
-    fn inner(res: Result<i32, &'static str>) -> Result<i32, String> {
-        let val = okerrr!(res, else err => return Err(format!("else_err: {}", err)));
-        Ok(val + 1)
+fn binds_and_transforms_err_payload() {
+    fn double(input: Result<i32, &'static str>) -> Result<i32, String> {
+        let value = okerrr!(input, else error => {
+            return Err(format!("invalid input: {error}"));
+        });
+        Ok(value * 2)
     }
 
-    assert_eq!(inner(Ok(99)), Ok(100));
-    assert_eq!(inner(Err("fail")), Err("else_err: fail".to_string()));
+    assert_eq!(double(Err("empty")), Err("invalid input: empty".into()));
 }
 
 #[test]
-fn test_okerrr_else_fallback() {
-    let ok_res: Result<i32, &'static str> = Ok(10);
-    let err_res: Result<i32, &'static str> = Err("oops");
-
-    let v1 = okerrr!(ok_res, else 0);
-    let v2 = okerrr!(err_res, else -1);
-
-    assert_eq!(v1, 10);
-    assert_eq!(v2, -1);
-}
-
-#[test]
-fn test_okerrr_shorthand_fallback() {
-    let ok_res: Result<i32, &'static str> = Ok(20);
-    let err_res: Result<i32, &'static str> = Err("oops");
-
-    let v1 = okerrr!(ok_res, 0);
-    let v2 = okerrr!(err_res, -1);
-
-    assert_eq!(v1, 20);
-    assert_eq!(v2, -1);
-}
-
-#[test]
-fn test_okerrr_shorthand_early_return() {
-    fn inner(res: Result<i32, &'static str>) -> Result<i32, String> {
-        let val = okerrr!(res);
-        Ok(val + 100)
+fn evaluates_input_once() {
+    fn extract(calls: &Cell<usize>, input: Result<i32, &'static str>) -> Result<i32, &'static str> {
+        let value = okerrr!(
+            {
+                calls.set(calls.get() + 1);
+                input
+            },
+            else error => return Err(error)
+        );
+        Ok(value)
     }
 
-    assert_eq!(inner(Ok(5)), Ok(105));
-    assert_eq!(inner(Err("error_msg")), Err("error_msg".to_string()));
+    let calls = Cell::new(0);
+    assert_eq!(extract(&calls, Ok(7)), Ok(7));
+    assert_eq!(calls.get(), 1);
+
+    assert_eq!(extract(&calls, Err("bad")), Err("bad"));
+    assert_eq!(calls.get(), 2);
 }
 
 #[test]
-fn test_okerrr_in_loop_control_flow() {
-    let items = vec![Ok(1), Err("skip"), Ok(3), Err("stop"), Ok(5)];
+fn controls_enclosing_loop() {
+    let items = [Ok(1), Err("skip"), Ok(3), Err("stop"), Ok(5)];
     let mut sum = 0;
 
     for item in items {
-        let val = okerrr!(item, err => {
-            if err == "stop" {
+        let value = okerrr!(item, else error => {
+            if error == "stop" {
                 break;
-            } else {
-                continue;
             }
+            continue;
         });
-        sum += val;
+        sum += value;
     }
 
-    assert_eq!(sum, 4); // 1 + 3
+    assert_eq!(sum, 4);
 }
 
 #[test]
-fn test_convenience_aliases() {
-    let res: Result<&str, &str> = Ok("OKERRR!");
-    assert_eq!(okerr!(res, else "default"), "OKERRR!");
-
-    let opt: Option<i32> = None;
-    assert_eq!(okerr_some!(opt, else 100), 100);
-}
-
-#[test]
-fn test_okerrr_some_forms() {
-    fn find_val(opt: Option<i32>) -> Option<i32> {
-        let v = okerrr_some!(opt);
-        Some(v * 2)
-    }
-
-    assert_eq!(find_val(Some(21)), Some(42));
-    assert_eq!(find_val(None), None);
-
-    let opt_none: Option<i32> = None;
-    assert_eq!(okerrr_some!(opt_none, else 100), 100);
-    assert_eq!(okerrr_some!(opt_none, 200), 200);
-}
-
-#[test]
-fn test_result_input_once_and_fallback_only_on_error() {
-    use std::cell::Cell;
-
-    let calls = Cell::new(0);
-    let fallbacks = Cell::new(0);
-    let input = || {
-        calls.set(calls.get() + 1);
-        Ok::<_, &'static str>(7)
-    };
-
-    assert_eq!(
-        okerrr!(input(), {
-            fallbacks.set(fallbacks.get() + 1);
-            0
-        }),
-        7
-    );
-    assert_eq!(calls.get(), 1);
-    assert_eq!(fallbacks.get(), 0);
-
-    let error: Result<i32, &'static str> = Err("bad");
-    assert_eq!(
-        okerrr!(error, else {
-            fallbacks.set(fallbacks.get() + 1);
-            0
-        }),
-        0
-    );
-    assert_eq!(fallbacks.get(), 1);
-}
-
-#[test]
-fn test_option_input_once_and_fallback_only_on_none() {
-    use std::cell::Cell;
-
-    let calls = Cell::new(0);
-    let fallbacks = Cell::new(0);
-    let input = || {
-        calls.set(calls.get() + 1);
-        Some(7)
-    };
-
-    assert_eq!(
-        okerrr_some!(input(), {
-            fallbacks.set(fallbacks.get() + 1);
-            0
-        }),
-        7
-    );
-    assert_eq!(calls.get(), 1);
-    assert_eq!(fallbacks.get(), 0);
-
-    let absent: Option<i32> = None;
-    assert_eq!(
-        okerrr_some!(absent, else {
-            fallbacks.set(fallbacks.get() + 1);
-            0
-        }),
-        0
-    );
-    assert_eq!(fallbacks.get(), 1);
-}
-
-#[test]
-fn test_opaque_error_requires_no_formatting() {
+fn accepts_explicit_panic_without_formatting_error() {
     struct Opaque;
 
-    let input: Result<i32, Opaque> = Err(Opaque);
-    assert_eq!(okerrr!(input, 0), 0);
+    let panic = std::panic::catch_unwind(|| {
+        let input: Result<i32, Opaque> = Err(Opaque);
+        okerrr!(input, else _error => panic!("required value was missing"))
+    });
+
+    assert!(panic.is_err());
+}
+
+#[test]
+fn accepts_awaited_input_in_async_context() {
+    async fn load(input: Result<i32, &'static str>) -> Result<i32, &'static str> {
+        let value = okerrr!(async { input }.await, else error => return Err(error));
+        Ok(value)
+    }
+
+    let future = load(Ok(7));
+    drop(future);
 }

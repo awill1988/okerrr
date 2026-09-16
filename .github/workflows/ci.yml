@@ -88,10 +88,21 @@ jobs:
           files: lcov.info
           fail_ci_if_error: false
 
+  msrv:
+    name: Rust 1.56 no_std
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.56.0
+
+      - name: Check minimum supported Rust version
+        run: cargo check --locked --no-default-features
+
   release_preview:
     name: Release Preview
     if: github.event_name == 'pull_request'
-    needs: [test, commit_lint]
+    needs: [test, msrv, commit_lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -127,7 +138,7 @@ jobs:
   release_gate:
     name: Check Release Version
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [test, commit_lint]
+    needs: [test, msrv, commit_lint]
     runs-on: ubuntu-latest
     outputs:
       release: ${{ steps.gate.outputs.release }}

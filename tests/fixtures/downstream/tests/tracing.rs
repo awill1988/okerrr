@@ -29,9 +29,9 @@ fn caller_decides_when_to_trace() {
         .finish();
 
     tracing::subscriber::with_default(subscriber, || {
-        assert_eq!(ordinary(Err(Opaque)), 0);
+        assert!(ordinary(Err(Opaque)).is_err());
         assert!(output.lock().unwrap().is_empty());
-        assert_eq!(caller_traced(Err("bad")), 0);
+        assert_eq!(caller_traced(Err("bad")), Err("bad"));
     });
 
     let message = String::from_utf8(output.lock().unwrap().clone()).unwrap();
