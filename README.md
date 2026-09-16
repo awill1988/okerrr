@@ -5,6 +5,8 @@ branch.
 
 [![Crates.io](https://img.shields.io/crates/v/okerrr.svg)](https://crates.io/crates/okerrr)
 [![Documentation](https://docs.rs/okerrr/badge.svg)](https://docs.rs/okerrr)
+[![Vulnerability scans](https://img.shields.io/github/actions/workflow/status/awill1988/okerrr/ci.yml?branch=main&event=push&label=vulnerability%20scans)](https://github.com/awill1988/okerrr/actions/workflows/ci.yml)
+[![Code coverage](https://codecov.io/gh/awill1988/okerrr/graph/badge.svg?branch=main)](https://codecov.io/gh/awill1988/okerrr)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
 
 ## Bound `else`

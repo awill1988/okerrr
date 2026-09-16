@@ -104,7 +104,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: read
-      checks: write
       contents: read
       security-events: write
     steps:
@@ -121,16 +120,15 @@ jobs:
       - name: Generate root lockfile
         run: cargo generate-lockfile
 
-      - name: Audit crate dependencies
-        uses: rustsec/audit-check@v2.0.0
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
         with:
-          token: ${{ github.token }}
+          tool: cargo-audit@0.22.2
 
-      - name: Audit downstream dependencies
-        uses: rustsec/audit-check@v2.0.0
-        with:
-          token: ${{ github.token }}
-          working-directory: tests/fixtures/downstream
+      - name: Audit Rust dependencies
+        run: |
+          cargo audit --deny warnings --file Cargo.lock
+          cargo audit --deny warnings --file tests/fixtures/downstream/Cargo.lock
 
       - name: Review dependency changes
         if: github.event_name == 'pull_request'
