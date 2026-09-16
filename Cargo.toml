@@ -8,8 +8,8 @@ description = "programmatic freedom from having to match Result<T, E>, okerrr!"
 readme = "README.md"
 repository = "https://github.com/awill1988/okerrr"
 license = "MIT OR Apache-2.0"
-keywords = ["macro", "ok", "err", "okerrr", "opentelemetry"]
-categories = ["rust-patterns", "no-std"]
+keywords = ["macros", "error-handling", "pattern-matching", "control-flow", "result"]
+categories = ["rust-patterns", "no-std", "development-tools"]
 
 [dependencies]
 tracing = { version = "0.1", default-features = false, optional = true }
