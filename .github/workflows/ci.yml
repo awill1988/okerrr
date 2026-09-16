@@ -23,11 +23,15 @@ on:
         description: Generated release pull request title
         required: false
         type: string
+      release_sha:
+        description: Merged main commit to recover
+        required: false
+        type: string
 
 jobs:
   commit_lint:
     name: Conventional Commit Lint
-    if: github.event_name != 'workflow_dispatch' || inputs.pr_number != ''
+    if: github.event_name != 'workflow_dispatch' || inputs.pr_number != '' || inputs.release_sha != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,13 +58,28 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
         run: |
           cargo run --quiet --manifest-path tools/commit_check/Cargo.toml -- \
-            --range "$BEFORE_SHA" "$GITHUB_SHA"
+            --github-range "$BEFORE_SHA" "$GITHUB_SHA"
+
+      - name: Lint recovery commit
+        if: github.event_name == 'workflow_dispatch' && inputs.release_sha != ''
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "release_sha must be a full commit sha" >&2
+            exit 1
+          fi
+          before_sha="$(git rev-parse "$RELEASE_SHA^")"
+          cargo run --quiet --manifest-path tools/commit_check/Cargo.toml -- \
+            --github-range "$before_sha" "$RELEASE_SHA"
 
   test:
     name: Test & Validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha || github.sha }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -135,6 +154,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha || github.sha }}
 
       - uses: dtolnay/rust-toolchain@1.56.0
 
@@ -150,6 +171,8 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha || github.sha }}
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -224,7 +247,9 @@ jobs:
 
   release_gate:
     name: Check Release Version
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.release_sha != '')
     needs: [test, msrv, security, commit_lint]
     runs-on: ubuntu-latest
     outputs:
@@ -232,20 +257,41 @@ jobs:
       publish: ${{ steps.gate.outputs.publish }}
       version: ${{ steps.gate.outputs.version }}
       prerelease: ${{ steps.gate.outputs.prerelease }}
+      sha: ${{ steps.gate.outputs.sha }}
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ inputs.release_sha || github.sha }}
 
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Check version gate
         id: gate
         env:
-          BEFORE_SHA: ${{ github.event.before }}
-        run: python3 scripts/release_gate.py --before-sha "$BEFORE_SHA" --recovery-sha "$GITHUB_SHA"
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          target_sha="${RELEASE_SHA:-$GITHUB_SHA}"
+          before_sha="$PUSH_BEFORE_SHA"
+          if [ -n "$RELEASE_SHA" ]; then
+            if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "release_sha must be a full commit sha" >&2
+              exit 1
+            fi
+            git fetch origin main
+            if ! git merge-base --is-ancestor "$target_sha" origin/main; then
+              echo "$target_sha is not reachable from main" >&2
+              exit 1
+            fi
+            before_sha="$(git rev-parse "$target_sha^")"
+          fi
+          python3 scripts/release_gate.py \
+            --before-sha "$before_sha" \
+            --recovery-sha "$target_sha"
+          echo "sha=$target_sha" >> "$GITHUB_OUTPUT"
 
   release:
     name: Publish Release
@@ -262,6 +308,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
+          ref: ${{ needs.release_gate.outputs.sha }}
 
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
         with:
@@ -279,12 +326,13 @@ jobs:
       - name: Stage tag and GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.release_gate.outputs.sha }}
           VERSION: ${{ needs.release_gate.outputs.version }}
         run: |
           tag="v$VERSION"
           if tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq .sha 2>/dev/null)"; then
-            if [ "$tag_sha" != "$GITHUB_SHA" ]; then
-              echo "$tag points to $tag_sha instead of $GITHUB_SHA" >&2
+            if [ "$tag_sha" != "$RELEASE_SHA" ]; then
+              echo "$tag points to $tag_sha instead of $RELEASE_SHA" >&2
               exit 1
             fi
           else
@@ -292,7 +340,7 @@ jobs:
               --method POST \
               "repos/$GITHUB_REPOSITORY/git/refs" \
               --field ref="refs/tags/$tag" \
-              --field sha="$GITHUB_SHA"
+              --field sha="$RELEASE_SHA"
           fi
 
           if gh release view "$tag" >/dev/null 2>&1; then

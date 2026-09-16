@@ -10,6 +10,8 @@ const FORBIDDEN_ATTRIBUTION: &[&str] = &[
     "assisted-by",
     "reviewed with claude code",
 ];
+const GITHUB_ACTIONS_COAUTHOR: &str =
+    "Co-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>";
 
 fn main() {
     if let Err(error) = run(env::args().skip(1).collect()) {
@@ -32,12 +34,16 @@ fn run(args: Vec<String>) -> Result<(), String> {
                 .map_err(|error| format!("could not read {}: {}", path, error))?;
             check_named(path, &message)
         }
-        [flag, from, to] if flag == "--range" => check_range(from, to),
-        _ => Err("usage: commit_check [--edit <path> | --range <from> <to>]".to_owned()),
+        [flag, from, to] if flag == "--range" => check_range(from, to, false),
+        [flag, from, to] if flag == "--github-range" => check_range(from, to, true),
+        _ => Err(
+            "usage: commit_check [--edit <path> | --range <from> <to> | --github-range <from> <to>]"
+                .to_owned(),
+        ),
     }
 }
 
-fn check_range(from: &str, to: &str) -> Result<(), String> {
+fn check_range(from: &str, to: &str, allow_github_footer: bool) -> Result<(), String> {
     let range = format!("{}..{}", from, to);
     let output = Command::new("git")
         .args(["log", "-z", "--format=%H%x00%B", &range])
@@ -55,10 +61,38 @@ fn check_range(from: &str, to: &str) -> Result<(), String> {
         }
         let revision = String::from_utf8_lossy(record[0]);
         let message = String::from_utf8_lossy(record[1]);
-        check_named(&revision, &message)?;
+        if allow_github_footer {
+            check_github_merge(&revision, &message)?;
+        } else {
+            check_named(&revision, &message)?;
+        }
     }
 
     Ok(())
+}
+
+fn check_github_merge(name: &str, message: &str) -> Result<(), String> {
+    let normalized = message.replace("\r\n", "\n");
+    let footer_count = normalized
+        .lines()
+        .filter(|line| *line == GITHUB_ACTIONS_COAUTHOR)
+        .count();
+    if footer_count == 0 {
+        return check_named(name, &normalized);
+    }
+    if footer_count != 1 {
+        return Err(format!(
+            "{}: duplicate github actions attribution footer",
+            name
+        ));
+    }
+
+    let filtered = normalized
+        .lines()
+        .filter(|line| *line != GITHUB_ACTIONS_COAUTHOR)
+        .collect::<Vec<_>>()
+        .join("\n");
+    check_named(name, filtered.trim_end())
 }
 
 fn check_named(name: &str, message: &str) -> Result<(), String> {
@@ -169,7 +203,7 @@ fn validate_prefix(prefix: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::validate;
+    use super::{check_github_merge, validate, GITHUB_ACTIONS_COAUTHOR};
 
     #[test]
     fn accepts_supported_messages() {
@@ -200,5 +234,24 @@ mod tests {
         for message in cases {
             assert!(validate(message).is_err(), "{}", message);
         }
+    }
+
+    #[test]
+    fn accepts_github_actions_squash_footer_on_main() {
+        let message = format!(
+            "chore(release): prepare 0.1.0-rc.1 (#13)\n\n{}",
+            GITHUB_ACTIONS_COAUTHOR
+        );
+
+        assert!(check_github_merge("revision", &message).is_ok());
+        assert!(validate(&message).is_err());
+    }
+
+    #[test]
+    fn rejects_other_coauthor_footers_on_main() {
+        let message =
+            "fix: preserve attribution policy\n\nCo-authored-by: robot <robot@example.com>";
+
+        assert!(check_github_merge("revision", message).is_err());
     }
 }
