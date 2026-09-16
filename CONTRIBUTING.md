@@ -26,8 +26,8 @@ design discussion is not approval to implement.
 
 This gate applies to pull requests opened by anyone other than
 [`@awill1988`]. The maintainer's own changes are exempt because their
-prioritization and design decision have already happened. The same technical,
-test, and review standards apply to every pull request.
+authorship supplies the prioritization and design decision directly. The same
+technical, test, and review standards apply to every pull request.
 
 An early pull request is not treated as an implementation candidate. The
 maintainer will point it to this guide and may close it without a technical
