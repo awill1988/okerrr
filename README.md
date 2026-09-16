@@ -104,17 +104,38 @@ exporter or tracing feature.
 
 ## Contributor checks
 
-Activate the tracked `pre-commit` hook in this checkout:
+Install the conventional commit linter and activate the tracked hooks:
 
 ```sh
+npm ci
 git config core.hooksPath .githooks
 ```
 
-It checks formatting and strict Clippy for the crate and its downstream
-`no_std` fixture. It stops a commit if either check fails. Run
+`pre-commit` checks formatting and strict Clippy for the crate and its
+downstream `no_std` fixture. `commit-msg` checks conventional commit
+format. Both stop invalid commits. Run
 `cargo fmt --all` and
 `cargo fmt --manifest-path tests/fixtures/downstream/Cargo.toml`, then
 restage reviewed changes before committing.
+
+## Releases
+
+A version increase in `Cargo.toml` signals a release. A merge without a
+version increase runs CI and skips publishing. CI validates the proposed
+version against the previous `main` manifest and crates.io, then provides
+a release-notes preview on the pull request.
+
+After the tests pass on `main`, the release job generates notes from
+conventional commits since the previous `v*` tag, publishes the manifest
+version to crates.io, and creates a matching GitHub release. Prerelease
+versions receive prerelease GitHub releases. Notes live in GitHub releases;
+there is no tracked changelog file.
+
+Publishing requires a `CARGO_REGISTRY_TOKEN` repository secret. Adding the
+release workflow alone does not publish the current `0.1.0`; the first
+automated release needs a version-bump pull request.
+Use `chore(release): bump version` for a version-only commit; release notes
+omit that commit.
 
 ## License
 
