@@ -118,6 +118,10 @@ format. Both stop invalid commits. Run
 `cargo fmt --manifest-path tests/fixtures/downstream/Cargo.toml`, then
 restage reviewed changes before committing.
 
+Squash merges use the pull request title as the final commit message. Mark
+breaking changes with `!` in that title (for example,
+`feat!: change macro syntax`) so release notes retain the signal.
+
 ## Releases
 
 A version increase in `Cargo.toml` signals a release. A merge without a
