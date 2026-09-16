@@ -118,34 +118,73 @@ def initial_version():
     return previous_version(roots[0])
 
 
-def release_decision(current, previous, initial, versions):
+def tag_target(version):
+    result = subprocess.run(
+        ["git", "rev-parse", f"refs/tags/v{version}^{{commit}}"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
+def release_decision(
+    current,
+    previous,
+    initial,
+    versions,
+    recovery_tag_matches=False,
+):
     if current == previous:
-        return False
+        return False, False
     if current == BOOTSTRAP_BASELINE:
         if previous == initial and not versions:
-            return False
+            return False, False
         raise ValueError("the bootstrap baseline cannot replace a later version")
     if compare_versions(current, previous) <= 0:
         raise ValueError(f"{current} must exceed previous main version {previous}")
     if previous != BOOTSTRAP_BASELINE and previous not in versions:
         raise ValueError(f"previous main version {previous} is not published")
+    current_is_published = False
     for published in versions:
-        if compare_versions(current, published) <= 0:
+        comparison = compare_versions(current, published)
+        if comparison == 0:
+            current_is_published = True
+        elif comparison < 0:
             raise ValueError(f"{current} must exceed published version {published}")
-    return True
+    if current_is_published:
+        if recovery_tag_matches:
+            return True, False
+        raise ValueError(f"{current} is already published without a matching recovery tag")
+    return True, True
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--before-sha", required=True)
+    parser.add_argument("--recovery-sha")
     args = parser.parse_args()
     crate_name, current = package_metadata()
     previous = previous_version(args.before_sha)
     # An unchanged manifest does not consult the registry.
     versions = published_versions(crate_name) if current != previous else []
-    release = release_decision(current, previous, initial_version(), versions)
+    recovery_tag_matches = (
+        args.recovery_sha is not None
+        and current in versions
+        and tag_target(current) == args.recovery_sha
+    )
+    release, publish = release_decision(
+        current,
+        previous,
+        initial_version(),
+        versions,
+        recovery_tag_matches,
+    )
     output = (
         f"release={'true' if release else 'false'}\n"
+        f"publish={'true' if publish else 'false'}\n"
         f"name={crate_name}\n"
         f"version={current}\n"
         f"prerelease={'true' if parse_version(current)[1] is not None else 'false'}\n"

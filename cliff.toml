@@ -19,6 +19,7 @@ fail_on_unmatched_commit = true
 protect_breaking_commits = true
 tag_pattern = '^v[0-9]+\.[0-9]+\.[0-9]+(?:[-+].*)?$'
 skip_tags = ""
+ignore_tags = '^v[0-9]+\.[0-9]+\.[0-9]+-.*$'
 commit_preprocessors = [
   { pattern = '^\[[A-Z][A-Z0-9]*-[0-9]+\] ', replace = "" },
 ]

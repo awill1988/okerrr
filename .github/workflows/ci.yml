@@ -6,11 +6,28 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Generated release pull request number
+        required: false
+        type: string
+      base_sha:
+        description: Generated release pull request base commit
+        required: false
+        type: string
+      head_sha:
+        description: Generated release pull request head commit
+        required: false
+        type: string
+      pr_title:
+        description: Generated release pull request title
+        required: false
+        type: string
 
 jobs:
   commit_lint:
     name: Conventional Commit Lint
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name != 'workflow_dispatch' || inputs.pr_number != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,11 +42,11 @@ jobs:
       - run: npm ci
 
       - name: Lint pull request commits and title
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || inputs.pr_number != ''
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || inputs.head_sha }}
+          PR_TITLE: ${{ github.event.pull_request.title || inputs.pr_title }}
         run: |
           node_modules/.bin/commitlint --from "$BASE_SHA" --to "$HEAD_SHA"
           printf '%s\n' "$PR_TITLE" | node_modules/.bin/commitlint
@@ -73,7 +90,14 @@ jobs:
         run: cargo publish --dry-run
 
       - name: Test release gate
-        run: python3 -m unittest discover -s scripts -p 'test_release_gate.py'
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: 1.24.x
+
+      - name: Lint GitHub Actions workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
@@ -146,21 +170,21 @@ jobs:
 
   release_preview:
     name: Release Preview
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || inputs.pr_number != ''
     needs: [test, msrv, security, commit_lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.head_sha }}
 
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Check version gate
         id: gate
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
         run: python3 scripts/release_gate.py --before-sha "$BASE_SHA"
 
       - uses: taiki-e/install-action@v2
@@ -187,6 +211,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release: ${{ steps.gate.outputs.release }}
+      publish: ${{ steps.gate.outputs.publish }}
       version: ${{ steps.gate.outputs.version }}
       prerelease: ${{ steps.gate.outputs.prerelease }}
     permissions:
@@ -202,7 +227,7 @@ jobs:
         id: gate
         env:
           BEFORE_SHA: ${{ github.event.before }}
-        run: python3 scripts/release_gate.py --before-sha "$BEFORE_SHA"
+        run: python3 scripts/release_gate.py --before-sha "$BEFORE_SHA" --recovery-sha "$GITHUB_SHA"
 
   release:
     name: Publish Release
@@ -216,13 +241,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
 
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@82cd3e7658a6f96c86c0234aeeda1748937cb0a1 # v2.85.13
         with:
           tool: git-cliff@2.13.1
 
@@ -231,7 +256,44 @@ jobs:
           VERSION: ${{ needs.release_gate.outputs.version }}
         run: git cliff --config cliff.toml --unreleased --tag "v$VERSION" --strip header --output release_notes.md
 
+      - name: Stage tag and GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release_gate.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          if tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq .sha 2>/dev/null)"; then
+            if [ "$tag_sha" != "$GITHUB_SHA" ]; then
+              echo "$tag points to $tag_sha instead of $GITHUB_SHA" >&2
+              exit 1
+            fi
+          else
+            gh api \
+              --method POST \
+              "repos/$GITHUB_REPOSITORY/git/refs" \
+              --field ref="refs/tags/$tag" \
+              --field sha="$GITHUB_SHA"
+          fi
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            if [ "$(gh release view "$tag" --json isDraft --jq .isDraft)" = "true" ]; then
+              gh release edit "$tag" \
+                --title "$tag" \
+                --notes-file release_notes.md \
+                --verify-tag
+            else
+              echo "$tag github release is already published"
+            fi
+          else
+            gh release create "$tag" \
+              --draft \
+              --title "$tag" \
+              --notes-file release_notes.md \
+              --verify-tag
+          fi
+
       - name: Publish crate
+        if: needs.release_gate.outputs.publish == 'true'
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
@@ -241,26 +303,37 @@ jobs:
           fi
           cargo publish
 
-      - name: Create tag and GitHub release
+      - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.release_gate.outputs.version }}
           PRERELEASE: ${{ needs.release_gate.outputs.prerelease }}
         run: |
-          args=()
+          if [ "$(gh release view "v$VERSION" --json isDraft --jq .isDraft)" = "false" ]; then
+            actual="$(gh release view "v$VERSION" --json isPrerelease --jq .isPrerelease)"
+            if [ "$actual" != "$PRERELEASE" ]; then
+              echo "v$VERSION prerelease state is $actual instead of $PRERELEASE" >&2
+              exit 1
+            fi
+            echo "v$VERSION github release is already published"
+            exit 0
+          fi
+
+          args=(--draft=false --title "v$VERSION" --notes-file release_notes.md --verify-tag)
           if [ "$PRERELEASE" = "true" ]; then
             args+=(--prerelease --latest=false)
+          else
+            args+=(--prerelease=false --latest)
           fi
-          gh release create "v$VERSION" --target "$GITHUB_SHA" --notes-file release_notes.md "${args[@]}"
+          gh release edit "v$VERSION" "${args[@]}"
 
   release_smoke:
     name: Release Secret Smoke Test
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.pr_number == ''
     needs: test
     runs-on: ubuntu-latest
     environment:
       name: production
-      deployment: false
     permissions:
       contents: read
     steps:

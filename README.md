@@ -130,24 +130,34 @@ breaking changes with `!` in that title, such as
 
 ## Releases
 
-A version increase in `Cargo.toml` signals a release. A merge without a
-version increase runs CI and skips publishing. CI validates the proposed
-version against the previous `main` manifest and crates.io, then provides a
-release-notes preview on the pull request.
+Ordinary pull requests keep the version in `Cargo.toml` unchanged. Their
+merges run CI and do not publish.
 
-After the tests pass on `main`, the release job generates notes from
-conventional commits since the previous `v*` tag, publishes the manifest
-version to crates.io, and creates a matching GitHub release. Prerelease
-versions receive prerelease GitHub releases. Notes live in GitHub releases;
-there is no tracked changelog file.
+To stage a release, run the `Prepare Release` workflow with an exact Cargo
+version such as `0.1.0-rc.1`. The workflow validates the version against
+`main` and crates.io, creates `release/v0.1.0-rc.1`, and opens a dedicated
+release pull request. CI validates the package and attaches a release-notes
+preview to that pull request.
+
+Merging the release pull request publishes its exact manifest version to
+crates.io and creates a matching GitHub release. Versions such as
+`0.1.0-rc.1` become prerelease GitHub releases and are not marked latest.
+Promote a candidate by running `Prepare Release` again with the next candidate
+or the stable version, such as `0.1.0`. Prerelease tags do not truncate the
+stable release notes, so the stable notes retain the complete change set.
+
+The release job creates the tag and a draft GitHub release before uploading
+to crates.io. A rerun can finish a partial release only when that tag still
+points to the same `main` commit. Any other duplicate version fails closed.
+Notes live in GitHub releases; there is no tracked changelog file.
 
 The published `0.0.0` package is the bootstrap baseline. The first version
 increase from it triggers publishing. Later increases require the previous
 version to be published. Run `CI` manually from GitHub Actions to check
 packaging and production secret access without publishing.
 
-Use `chore(release): bump version` for a version-only commit; release notes
-omit that commit.
+Generated release commits use `chore(release): prepare <version>`; release
+notes omit those commits.
 
 ## License
 
