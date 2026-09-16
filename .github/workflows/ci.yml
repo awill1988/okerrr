@@ -7,6 +7,37 @@ on:
     branches: [ main ]
 
 jobs:
+  commit_lint:
+    name: Conventional Commit Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint pull request commits and title
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          node_modules/.bin/commitlint --from "$BASE_SHA" --to "$HEAD_SHA"
+          printf '%s\n' "$PR_TITLE" | node_modules/.bin/commitlint
+
+      - name: Lint new main commits
+        if: github.event_name == 'push'
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node_modules/.bin/commitlint --from "$BEFORE_SHA" --to "$GITHUB_SHA"
+
   test:
     name: Test & Validate
     runs-on: ubuntu-latest
@@ -39,6 +70,9 @@ jobs:
       - name: Cargo Publish Dry Run
         run: cargo publish --dry-run
 
+      - name: Test release gate
+        run: python3 -m unittest discover -s scripts -p 'test_release_gate.py'
+
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
@@ -51,3 +85,97 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: lcov.info
           fail_ci_if_error: false
+
+  release_preview:
+    name: Release Preview
+    if: github.event_name == 'pull_request'
+    needs: [test, commit_lint]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Check version gate
+        id: gate
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/release_gate.py --before-sha "$BASE_SHA"
+
+      - uses: taiki-e/install-action@v2
+        if: steps.gate.outputs.release == 'true'
+        with:
+          tool: git-cliff@2.13.1
+
+      - name: Generate preview notes
+        if: steps.gate.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.gate.outputs.version }}
+        run: git cliff --config cliff.toml --unreleased --tag "v$VERSION" --strip header --output release_notes.md
+
+      - uses: actions/upload-artifact@v4
+        if: steps.gate.outputs.release == 'true'
+        with:
+          name: release-notes-preview
+          path: release_notes.md
+
+  release:
+    name: Publish Release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, commit_lint]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: crates-io-release
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Check version gate
+        id: gate
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: python3 scripts/release_gate.py --before-sha "$BEFORE_SHA"
+
+      - uses: taiki-e/install-action@v2
+        if: steps.gate.outputs.release == 'true'
+        with:
+          tool: git-cliff@2.13.1
+
+      - name: Generate release notes
+        if: steps.gate.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.gate.outputs.version }}
+        run: git cliff --config cliff.toml --unreleased --tag "v$VERSION" --strip header --output release_notes.md
+
+      - name: Publish crate
+        if: steps.gate.outputs.release == 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "cargo registry token is missing" >&2
+            exit 1
+          fi
+          cargo publish
+
+      - name: Create tag and GitHub release
+        if: steps.gate.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.gate.outputs.version }}
+          PRERELEASE: ${{ steps.gate.outputs.prerelease }}
+        run: |
+          args=()
+          if [ "$PRERELEASE" = "true" ]; then
+            args+=(--prerelease --latest=false)
+          fi
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --notes-file release_notes.md "${args[@]}"

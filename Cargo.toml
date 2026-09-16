@@ -1,11 +1,12 @@
 [package]
 name = "okerrr"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
 rust-version = "1.56"
 authors = ["Adam Williams"]
 description = "macros for concise Result and Option handling with caller-level control flow"
 readme = "README.md"
+exclude = ["node_modules/", "package*.json", "commitlint.config.cjs", "cliff.toml", "scripts/", ".githooks/"]
 repository = "https://github.com/awill1988/okerrr"
 license = "MIT OR Apache-2.0"
 keywords = ["macros", "error-handling", "pattern-matching", "control-flow", "result"]
