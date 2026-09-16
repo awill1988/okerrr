@@ -117,8 +117,10 @@ jobs:
           build-mode: none
           queries: security-extended
 
-      - name: Generate root lockfile
-        run: cargo generate-lockfile
+      - name: Generate lockfiles
+        run: |
+          cargo generate-lockfile
+          cargo generate-lockfile --manifest-path tests/fixtures/downstream/Cargo.toml
 
       - name: Install cargo-audit
         uses: taiki-e/install-action@v2
