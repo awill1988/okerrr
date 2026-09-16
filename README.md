@@ -129,10 +129,12 @@ version to crates.io, and creates a matching GitHub release. Prerelease
 versions receive prerelease GitHub releases. Notes live in GitHub releases;
 there is no tracked changelog file.
 
-Publishing requires a `CARGO_REGISTRY_TOKEN` repository secret. For
-bootstrap, `0.0.0` is an unreleased baseline: the first version increase
-from it triggers publishing. Later increases require the previous version
-to be published.
+Publishing uses the `CARGO_REGISTRY_TOKEN` secret in the `production`
+GitHub environment. For bootstrap, `0.0.0` is an unreleased baseline:
+the first version increase from it triggers publishing. Later increases
+require the previous version to be published. Run `CI` manually from
+GitHub Actions to check packaging and production secret access without
+publishing.
 
 Use `chore(release): bump version` for a version-only commit; release notes
 omit that commit.
