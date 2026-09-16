@@ -34,12 +34,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-
-      - run: npm ci
+      - uses: dtolnay/rust-toolchain@stable
 
       - name: Lint pull request commits and title
         if: github.event_name == 'pull_request' || inputs.pr_number != ''
@@ -48,14 +43,18 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || inputs.head_sha }}
           PR_TITLE: ${{ github.event.pull_request.title || inputs.pr_title }}
         run: |
-          node_modules/.bin/commitlint --from "$BASE_SHA" --to "$HEAD_SHA"
-          printf '%s\n' "$PR_TITLE" | node_modules/.bin/commitlint
+          cargo run --quiet --manifest-path tools/commit_check/Cargo.toml -- \
+            --range "$BASE_SHA" "$HEAD_SHA"
+          printf '%s\n' "$PR_TITLE" | \
+            cargo run --quiet --manifest-path tools/commit_check/Cargo.toml
 
       - name: Lint new main commits
         if: github.event_name == 'push'
         env:
           BEFORE_SHA: ${{ github.event.before }}
-        run: node_modules/.bin/commitlint --from "$BEFORE_SHA" --to "$GITHUB_SHA"
+        run: |
+          cargo run --quiet --manifest-path tools/commit_check/Cargo.toml -- \
+            --range "$BEFORE_SHA" "$GITHUB_SHA"
 
   test:
     name: Test & Validate
@@ -70,10 +69,14 @@ jobs:
       - name: Run default tests
         run: cargo test
 
+      - name: Test commit message linter
+        run: cargo test --manifest-path tools/commit_check/Cargo.toml
+
       - name: Check formatting
         run: |
           cargo fmt --all -- --check
           cargo fmt --manifest-path tests/fixtures/downstream/Cargo.toml -- --check
+          cargo fmt --manifest-path tools/commit_check/Cargo.toml -- --check
 
       - name: Check no_std downstream
         run: cargo check --manifest-path tests/fixtures/downstream/Cargo.toml --no-default-features
@@ -85,6 +88,7 @@ jobs:
         run: |
           cargo clippy --all-targets --all-features -- -D warnings
           cargo clippy --manifest-path tests/fixtures/downstream/Cargo.toml --all-targets --features with_tracing -- -D warnings
+          cargo clippy --manifest-path tools/commit_check/Cargo.toml --all-targets -- -D warnings
 
       - name: Cargo Publish Dry Run
         run: cargo publish --dry-run

@@ -1,9 +1,8 @@
 #!/bin/sh
 set -eu
 
-if [ ! -x node_modules/.bin/commitlint ]; then
-  echo "install commitlint dependencies with npm ci" >&2
-  exit 1
-fi
-
-node_modules/.bin/commitlint --edit "$1"
+cargo run \
+  --quiet \
+  --manifest-path tools/commit_check/Cargo.toml \
+  -- \
+  --edit "$1"

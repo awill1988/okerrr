@@ -1,5 +1,4 @@
 target/
-node_modules/
 __pycache__/
 release_notes.md
 **/*.rs.bk

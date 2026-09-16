@@ -111,10 +111,9 @@ sets the tone; the macro's contract comes from Rust.
 
 ## Contributor checks
 
-Install the conventional commit linter and activate the tracked hooks:
+The conventional commit linter is written in Rust. Activate the tracked hooks:
 
 ```sh
-npm ci
 git config core.hooksPath .githooks
 ```
 
