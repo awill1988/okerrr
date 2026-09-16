@@ -201,22 +201,9 @@ preview to that pull request.
 Merging the release pull request publishes its exact manifest version to
 crates.io and creates a matching GitHub release. Versions such as
 `0.1.0-rc.1` become prerelease GitHub releases and are not marked latest.
-Promote a candidate by running `Prepare Release` again with the next candidate
-or the stable version, such as `0.1.0`. Prerelease tags do not truncate the
-stable release notes, so the stable notes retain the complete change set.
-
-The release job creates the tag and a draft GitHub release before uploading
-to crates.io. A rerun can finish a partial release only when that tag still
-points to the same `main` commit. Any other duplicate version fails closed.
-Notes live in GitHub releases; there is no tracked changelog file.
-
-The published `0.0.0` package is the bootstrap baseline. The first version
-increase from it triggers publishing. Later increases require the previous
-version to be published. Run `CI` manually from GitHub Actions to check
-packaging and production secret access without publishing.
-
-Generated release commits use `chore(release): prepare <version>`; release
-notes omit those commits.
+Run `Prepare Release` with the next candidate or stable version to promote a
+candidate. Release notes are generated in GitHub releases and include the
+complete change set since the preceding stable version.
 
 ## License
 
